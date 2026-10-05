@@ -30,7 +30,7 @@ def mask_downsample(mask, maskEncoder=None, factor=4):
         print("Warning: maskEncoder is None, downsampling using maxPool")
         mask_downsampled = F.max_pool3d(mask, kernel_size=factor, stride=factor)
     else:
-        with torch.amp.autocast("cuda", enabled=True):
+        with torch.amp.autocast("cuda", enabled=mask.is_cuda):
             z_mu, z_sigma = maskEncoder.encode(mask)
             mask_downsampled = maskEncoder.sampling(z_mu, z_sigma)
             
@@ -414,7 +414,7 @@ class CondLatentDiffusionPipeline_LIDC3D(LatentDiffusionPipelineBase):
         # scale and decode the image latents with vae
         #images = latents.cpu().permute(0, 2, 3, 4, 1).float().numpy()
         if self.use_vae:
-            with torch.amp.autocast("cuda", enabled=True):
+            with torch.amp.autocast("cuda", enabled=latents.is_cuda):
                 images = self.vae.decode(latents)
             images = images.repeat((1, 3, 1, 1, 1))
         else:
@@ -448,7 +448,7 @@ class CondLatentDiffusionPipeline_LIDC3D(LatentDiffusionPipelineBase):
             if return_latents:
                 return images, latents
             if self.mask_mode != "none":
-                output_masks = mask_latents.tile((1, 1, 4, 4, 4)).cpu().numpy()
+                output_masks = mask_latents.tile((1, 1, 4, 4, 4)).cpu().float().numpy()
                 if "texture" in self.mask_mode: 
                     return images, input_masks, output_masks, texture_scores
                 else:
@@ -683,125 +683,39 @@ def merge_images_with_masks(images, masks):
     return super_images
 
 def read_N_masks_for_inference(N, dataset_dir, mask_mode, useMaskEncoder, start_indx=None):
-
-
-    inference_dataset = LIDCVolumes(dataset_dir,
-                                    mask_mode=mask_mode, useMaskEncoder=False, masks_only=True) # we always load the masks without one-hot encoding, even if useMaskEncoder=True because here we set the texture values for inference
-
-    nodule_masks = []
-    nodule_textures = []
-
-    if mask_mode == "nodule":
-        num_classes = 2  # background, nodule
-    elif mask_mode == "nodule+lung":
-        num_classes = 3  # background, nodule, lung
-    elif mask_mode == "nodule+lung+texture":
-        num_classes = 7  # background, nodule texture 1-5, lung
-    else:
-        raise ValueError("Invalid mask_mode")
-
-    if start_indx == None:
-        for i in range(N):
-
-            mask_orig = inference_dataset[i]["mask"]
-            
+    """Load a contiguous batch of masks in the representation expected by the model."""
+    num_classes = {"nodule": 2, "nodule+lung": 3, "nodule+lung+texture": 7}
+    if mask_mode not in num_classes:
+        raise ValueError(f"Invalid mask_mode: {mask_mode}")
+    dataset = LIDCVolumes(dataset_dir, mask_mode=mask_mode, masks_only=True)
+    start = 0 if start_indx is None else start_indx
+    if N < 1 or start < 0 or start + N > len(dataset):
+        raise ValueError(f"Requested masks [{start}:{start + N}], but dataset has {len(dataset)} masks.")
+    masks, textures = [], []
+    for index in range(start, start + N):
+        mask = dataset[index]["mask"].clone()
+        texture = 0
+        if mask_mode == "nodule+lung+texture":
+            # Dataset values: lung=0.1, nodules=0.2..1.0.
+            lung = torch.isclose(mask, torch.tensor(0.1))
+            nodules = mask >= 0.2
+            probs = np.array([113, 93, 115, 379, 857], dtype=float)
+            texture = int(np.random.choice(np.arange(1, 6), p=probs / probs.sum()))
             if useMaskEncoder:
-                
-                nodule_texture = 0
-
-                if mask_mode == "nodule":
-                    mask_orig = (mask_orig >= 1).astype(np.int64)  # 0=background, 1=nodule
-                elif mask_mode == "nodule+lung":
-                    
-                    mask_orig[mask_orig >= 1] = 1  # nodules
-                    mask_orig[mask_orig == 0.5] = 2 # lungs
-                   
-                else:  # "nodule+lung+texture"
-                    #LIDC_PROBS TEXTURE
-                    mask_orig = mask_orig * 5.0
-                    mask_orig = mask_orig * 5.0
-                    probs = np.array([113, 93, 115, 379, 857])
-                    normalized_probs = probs/sum(probs)
-                    nodule_texture = np.random.choice(np.arange(1, 6), 1, p=normalized_probs)[0]
-                    #nodule_texture = np.random.randint(1, 6)
-                    #nodule_texture = np.random.choice([1, 3, 5])
-                    mask_orig[mask_orig >= 1] = nodule_texture
-                    mask_orig[mask_orig == 0.5] = 6  # lungs
-               
-                mask_orig = mask_orig.long()
-                mask_input = F.one_hot(mask_orig.squeeze(0), num_classes=num_classes).permute(3,0,1,2).float()  
-                nodule_textures.append(nodule_texture)
-                nodule_masks.append(mask_input)
-
+                class_ids = torch.zeros_like(mask, dtype=torch.long)
+                class_ids[lung] = 6
+                class_ids[nodules] = texture
             else:
-
-                nodule_texture = 0
-                if mask_mode == "nodule+lung+texture":
-                    
-                    #LIDC_PROBS TEXTURE
-                    mask_orig = mask_orig * 5.0
-                    probs = np.array([113, 93, 115, 379, 857])
-                    normalized_probs = probs/sum(probs)
-                    nodule_texture = np.random.choice(np.arange(1, 6), 1, p=normalized_probs)[0]
-                    #nodule_texture = np.random.randint(1, 6) 
-                    #nodule_texture = np.random.choice([1, 3, 5])
-                    mask_orig[mask_orig >= 1] = nodule_texture
-                    # assign a random nodule texture on a scale of 1 (non-solid) to 5 (solid)
-                    #mask_orig[mask_orig >= 1] = np.random.randint(1, 6)
-                    mask_orig = mask_orig / 5.0 # normalize again
-                nodule_masks.append(mask_orig)
-                nodule_textures.append(nodule_texture)
-            
-    else:
-        
-        dataset_len = len(inference_dataset)
-        for j in range(start_indx, min(start_indx + N, dataset_len)):
-            mask_orig = inference_dataset[j]["mask"]
-            
-            nodule_texture = 0
-
-            if useMaskEncoder:
-                if mask_mode == "nodule":
-                    mask_orig = (mask_orig >= 1).astype(np.int64)  # 0=background, 1=nodule
-                elif mask_mode == "nodule+lung":
-                    
-                    mask_orig[mask_orig >= 1] = 1  # nodules
-                    mask_orig[mask_orig == 0.5] = 2  # lungs
-                
-                else: 
-                    #LIDC_PROBS TEXTURE
-                    mask_orig = mask_orig * 5.0
-                    mask_orig = mask_orig * 5.0
-                    probs = np.array([113, 93, 115, 379, 857])
-                    normalized_probs = probs/sum(probs)
-                    nodule_texture = np.random.choice(np.arange(1, 6), 1, p=normalized_probs)[0]
-                    #nodule_texture = np.random.randint(1, 6)
-                    #nodule_texture = np.random.choice([1, 3, 5])
-                    mask_orig[mask_orig >= 1] = nodule_texture
-                    mask_orig[mask_orig == 0.5] = 6  # lungs
-                   
-                mask_orig = mask_orig.long()
-                mask_input = F.one_hot(mask_orig.squeeze(0), num_classes=num_classes).permute(3,0,1,2).float()  # [C,D,H,W]
-                nodule_textures.append(nodule_texture)
-                nodule_masks.append(mask_input)
-
-            else:
-                if mask_mode == "nodule+lung+texture":
-                    #LIDC_PROBS TEXTURE
-                    mask_orig = mask_orig * 5.0
-                    probs = np.array([113, 93, 115, 379, 857])
-                    normalized_probs = probs/sum(probs)
-                    nodule_texture = np.random.choice(np.arange(1, 6), 1, p=normalized_probs)[0]
-                    #nodule_texture = np.random.randint(1, 6)
-                    #nodule_texture = np.random.choice([1, 3, 5])
-                    mask_orig[mask_orig >= 1] = nodule_texture
-                    mask_orig = mask_orig / 5.0  # normalize again
-                nodule_masks.append(mask_orig)
-                nodule_textures.append(nodule_texture)
-    
-    input_masks = np.stack(nodule_masks)
-    input_textures = np.stack(nodule_textures)
-    return input_masks, input_textures
+                mask[nodules] = texture / 5.0
+        elif useMaskEncoder:
+            class_ids = (mask >= 1).long()
+            if mask_mode == "nodule+lung":
+                class_ids[torch.isclose(mask, torch.tensor(0.5))] = 2
+        if useMaskEncoder:
+            mask = F.one_hot(class_ids.squeeze(0), num_classes=num_classes[mask_mode]).permute(3, 0, 1, 2).float()
+        masks.append(mask.numpy())
+        textures.append(texture)
+    return np.stack(masks), np.asarray(textures)
 
 def squeeze_except_batch(tensor):
     # tensor[0] selects the first item in the batch, revealing the rest of the shape

@@ -1,0 +1,16 @@
+*
+!Dockerfile
+!requirements-inference.txt
+!src/
+!src/**
+!data/
+!data/ckpts/
+!data/ckpts/2025-09-10_17-51-07_256_bsz1_lr1e-5_nodule+lung_mask/
+!data/ckpts/2025-09-10_17-51-07_256_bsz1_lr1e-5_nodule+lung_mask/**
+!data/masks/
+!data/masks/**
+!LICENSE
+!NOTICE
+**/__pycache__/
+**/*.pyc
+src/web_outputs/

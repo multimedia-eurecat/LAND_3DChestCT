@@ -1,0 +1,15 @@
+# Inference runtime, aligned with environment.yml. PyTorch is installed separately.
+diffusers==0.34.0
+transformers==4.40.2
+monai==1.5.0
+numpy==2.1.3
+scipy==1.15.3
+nibabel==5.3.2
+matplotlib==3.10.3
+einops==0.8.1
+Flask==3.1.1
+Pillow==11.3.0
+imageio==2.37.0
+imageio-ffmpeg==0.6.0
+accelerate>=0.26.1,<2
+safetensors==0.5.3

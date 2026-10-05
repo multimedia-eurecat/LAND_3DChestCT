@@ -2,6 +2,8 @@
 checkpoints/
 logs/
 outputs/
+web_outputs/
+src/web_outputs/
 jobs_test/
 jobs_inference/
 wandb/

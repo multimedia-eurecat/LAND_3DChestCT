@@ -10,6 +10,13 @@ This is the official PyTorch implementation of the paper **"Anatomically guided 
 
 📄 [Read the paper](https://doi.org/10.1038/s41598-026-51634-4) and 🚀 [Check out the project page](https://aolivtous.github.io/publications/land.html) for interactive sample viewer, talks & posters!
 
+## Web inference app
+
+Launch `src/inference_ldm_app.py` directly or in Docker to generate 3D CT volumes,
+preview the results, and download synthetic data. See
+[launch commands and Docker instructions](DOCKER_INSTRUCTIONS.md).
+
+
 ---
 ## 🧭 Pipeline Overview
 Reproducing LAND means running four stages, in this order — each one depends on the output of the previous:
