@@ -43,8 +43,11 @@ Generation defaults to CUDA when available; override with `--device cpu` or
 ## Build and run Docker
 
 The host needs Docker, NVIDIA drivers, and NVIDIA Container Toolkit for GPU
-execution. The image installs Python 3.10 and PyTorch 2.6 with CUDA 12.4 plus
-the inference dependencies. The default checkpoint (including its CT and mask
+execution. The image uses `python:3.10-slim-bookworm` and installs PyTorch 2.6
+with CUDA 12.4 plus the inference dependencies. CUDA runtime libraries and cuDNN
+come from PyTorch's pip dependencies, avoiding a second copy in an NVIDIA CUDA
+base image. The host still supplies the NVIDIA driver through Container Toolkit.
+The default checkpoint (including its CT and mask
 VAEs and scheduler) and the 10 conditioning masks are copied into the image.
 Build from a repository containing these files under `data/ckpts/` and
 `data/masks/`; no checkpoint or dataset mounts are needed at deployment time.
@@ -73,6 +76,18 @@ docker run --rm land-3dchestct:latest src/inference_ldm_app.py --help
 docker run --rm --gpus all land-3dchestct:latest \
   -c 'import torch; print(torch.cuda.is_available())'
 ```
+
+The build checks that the app imports and that PyTorch has CUDA 12.4 support.
+To verify GPU computation after rebuilding:
+
+```bash
+docker run --rm --gpus all land-3dchestct:latest \
+  -c 'import torch; assert torch.cuda.is_available(); x = torch.ones(4, device="cuda"); print(torch.cuda.get_device_name()); print((x + x).cpu())'
+```
+
+For a software hub requiring an explicit entry point, use
+`/usr/local/bin/python3 /opt/app/src/inference_ldm_app.py`. The previous
+`/usr/bin/python3` path remains available as a compatibility symlink.
 
 The image includes all inference inputs for this checkpoint and requires no
 model downloads at runtime. To use other checkpoints, separately stored VAEs,
@@ -133,6 +148,14 @@ image first is optional:
 
 ```bash
 docker build -t land-3dchestct:latest .
+```
+
+Docker normally reuses unchanged build layers. To rebuild every layer from
+scratch, for example after changing dependency installation or when diagnosing
+a stale build cache, use `--no-cache`:
+
+```bash
+docker build --no-cache -t land-3dchestct:latest .
 ```
 
 Existing containers continue using the previous image. Start a new container

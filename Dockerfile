@@ -1,4 +1,5 @@
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+# PyTorch's CUDA wheels supply the CUDA runtime and cuDNN dependencies.
+FROM python:3.10-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -13,8 +14,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LAND_OUTPUTS_DIR=/opt/app/web_outputs
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 python3-pip ca-certificates libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/local/bin/python3 /usr/bin/python3
 
 WORKDIR /opt/app
 COPY requirements-inference.txt .
@@ -32,6 +34,7 @@ RUN python3 -m pip install --no-cache-dir --timeout 120 --retries 10 \
         -r requirements-inference.txt
 
 COPY src ./src
+RUN python3 -c "import torch, torchvision; import inference_ldm_app; assert torch.version.cuda == '12.4', torch.version.cuda"
 COPY LICENSE NOTICE ./
 COPY data/ckpts/2025-09-10_17-51-07_256_bsz1_lr1e-5_nodule+lung_mask/ ./data/ckpts/2025-09-10_17-51-07_256_bsz1_lr1e-5_nodule+lung_mask/
 COPY data/masks/ ./data/masks/
