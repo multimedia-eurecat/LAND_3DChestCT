@@ -1,0 +1,14 @@
+[Unit]
+Description=LAND 3DChestCT inference application
+After=network-online.target land-gpu-setup.service
+Wants=network-online.target
+Requires=land-gpu-setup.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/land-app.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

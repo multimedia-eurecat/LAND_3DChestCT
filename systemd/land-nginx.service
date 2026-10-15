@@ -1,0 +1,13 @@
+[Unit]
+Description=LAND nginx reverse proxy
+After=network-online.target land-app.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/nginx-run.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

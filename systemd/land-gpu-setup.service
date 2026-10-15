@@ -1,0 +1,13 @@
+[Unit]
+Description=Configure NVIDIA GPU for LAND
+After=network-online.target land-runtime-env.service
+Wants=network-online.target
+Requires=land-runtime-env.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gpu-setup.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

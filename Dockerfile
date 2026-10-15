@@ -26,15 +26,16 @@ RUN python3 -m pip install --no-cache-dir --timeout 120 --retries 10 \
 # than the CUDA index's NVIDIA mirror. Keep download hash verification enabled.
 RUN python3 -m pip install --no-cache-dir --timeout 120 --retries 10 \
         --resume-retries 10 --index-url https://pypi.org/simple \
-        --find-links https://download.pytorch.org/whl/cu124/torch/ \
-        --find-links https://download.pytorch.org/whl/cu124/torchvision/ \
-        torch==2.6.0+cu124 torchvision==0.21.0+cu124 \
+    --find-links https://download.pytorch.org/whl/cu128/torch/ \
+    --find-links https://download.pytorch.org/whl/cu128/torchvision/ \
+    torch==2.7.0+cu128 torchvision==0.22.0+cu128 \
     && python3 -m pip install --no-cache-dir --timeout 120 --retries 10 \
         --resume-retries 10 --index-url https://pypi.org/simple \
-        -r requirements-inference.txt
+        -r requirements-inference.txt \
+    && python3 -m pip check \
+    && python3 -c "import torch, torchvision; assert torch.__version__ == '2.7.0+cu128'; assert torchvision.__version__ == '0.22.0+cu128'"
 
 COPY src ./src
-RUN python3 -c "import torch, torchvision; import inference_ldm_app; assert torch.version.cuda == '12.4', torch.version.cuda"
 COPY LICENSE NOTICE ./
 COPY data/ckpts/2025-09-10_17-51-07_256_bsz1_lr1e-5_nodule+lung_mask/ ./data/ckpts/2025-09-10_17-51-07_256_bsz1_lr1e-5_nodule+lung_mask/
 COPY data/masks/ ./data/masks/

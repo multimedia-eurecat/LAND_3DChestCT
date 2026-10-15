@@ -16,6 +16,9 @@ Launch `src/inference_ldm_app.py` directly or in Docker to generate 3D CT volume
 preview the results, and download synthetic data. See
 [launch commands and Docker instructions](DOCKER_INSTRUCTIONS.md).
 
+For TFGrid deployment, Software Repository packaging, nginx, and SSH access,
+see the [TFGrid runtime guide](docs/threefold-runtime.md).
+
 
 ---
 ## 🧭 Pipeline Overview
