@@ -1,0 +1,14 @@
+[Unit]
+Description=LAND SSH server
+After=network-online.target land-runtime-env.service
+Wants=network-online.target
+Requires=land-runtime-env.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sshd-run.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

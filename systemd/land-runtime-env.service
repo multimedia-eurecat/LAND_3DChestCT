@@ -1,0 +1,12 @@
+[Unit]
+Description=Mount ThreeFold workload environment
+After=local-fs.target
+Before=land-gpu-setup.service land-sshd.service land-app.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fullvm-runtime-env.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

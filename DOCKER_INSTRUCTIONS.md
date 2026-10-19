@@ -43,8 +43,8 @@ Generation defaults to CUDA when available; override with `--device cpu` or
 ## Build and run Docker
 
 The host needs Docker, NVIDIA drivers, and NVIDIA Container Toolkit for GPU
-execution. The image uses `python:3.10-slim-bookworm` and installs PyTorch 2.6
-with CUDA 12.4 plus the inference dependencies. CUDA runtime libraries and cuDNN
+execution. The image uses `python:3.10-slim-bookworm` and installs PyTorch 2.7
+with CUDA 12.8 plus the inference dependencies. CUDA runtime libraries and cuDNN
 come from PyTorch's pip dependencies, avoiding a second copy in an NVIDIA CUDA
 base image. The host still supplies the NVIDIA driver through Container Toolkit.
 The default checkpoint (including its CT and mask
@@ -56,6 +56,11 @@ Build from a repository containing these files under `data/ckpts/` and
 docker build -t land-3dchestct:latest .
 docker run --rm --gpus all -p 7860:7860 land-3dchestct:latest
 ```
+
+This standard image is intended for Docker. For TFGrid GPU deployment and the
+Software Repository, use `Dockerfile.fullvm` and follow
+[`docs/threefold-runtime.md`](docs/threefold-runtime.md). The Full VM image
+contains its own kernel and starts LAND, nginx, and optional SSH with systemd.
 
 To preserve generated files after the container exits, optionally mount an
 output directory:
@@ -77,7 +82,7 @@ docker run --rm --gpus all land-3dchestct:latest \
   -c 'import torch; print(torch.cuda.is_available())'
 ```
 
-The build checks that the app imports and that PyTorch has CUDA 12.4 support.
+The build checks that the app imports and that PyTorch has CUDA 12.8 support.
 To verify GPU computation after rebuilding:
 
 ```bash
@@ -85,17 +90,16 @@ docker run --rm --gpus all land-3dchestct:latest \
   -c 'import torch; assert torch.cuda.is_available(); x = torch.ones(4, device="cuda"); print(torch.cuda.get_device_name()); print((x + x).cpu())'
 ```
 
-For a software hub requiring an explicit entry point, use
-`/usr/local/bin/python3 /opt/app/src/inference_ldm_app.py`. The previous
-`/usr/bin/python3` path remains available as a compatibility symlink.
+For the TFGrid Full VM rootfs, set the workload entrypoint to an empty string.
+Full VM boot selects the packaged kernel and starts systemd directly.
 
 The image includes all inference inputs for this checkpoint and requires no
 model downloads at runtime. To use other checkpoints, separately stored VAEs,
 or additional masks, mount their directories read-only and supply the
 corresponding app options.
 
-To deploy on a different machine, push the built image to your container
-registry, or transfer it as an archive:
+To deploy the standard Docker image on another Docker host, push it to a
+container registry or transfer it with `docker save`:
 
 ```bash
 # On the build machine:
@@ -104,6 +108,11 @@ docker save -o land-3dchestct.tar land-3dchestct:latest
 docker load -i land-3dchestct.tar
 docker run --rm --gpus all -p 7860:7860 land-3dchestct:latest
 ```
+
+Do not upload this `docker save` archive to the Software Repository. It expects
+a flat root filesystem produced with `docker export`; the exact TFGrid build,
+export, runtime variables, SSH login, and troubleshooting commands are in
+[`docs/threefold-runtime.md`](docs/threefold-runtime.md).
 
 Configuration can also use `LAND_MODEL_PATH`, `LAND_VAE_PATH`,
 `LAND_VAE_MASK_PATH`, `LAND_MASK_DATASET`, `LAND_MASK_MODE`, `LAND_OUTPUTS_DIR`,
